@@ -1,0 +1,120 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Accuracy: 0.76\n",
+      "              precision    recall  f1-score   support\n",
+      "\n",
+      "           0       0.48      0.19      0.28       155\n",
+      "           1       0.79      0.94      0.86       495\n",
+      "\n",
+      "    accuracy                           0.76       650\n",
+      "   macro avg       0.64      0.56      0.57       650\n",
+      "weighted avg       0.72      0.76      0.72       650\n",
+      "\n",
+      "Feature importance saved to 'feature_importance.csv'\n"
+     ]
+    }
+   ],
+   "source": [
+    "import pandas as pd\n",
+    "import numpy as np\n",
+    "import xgboost as xgb\n",
+    "from sklearn.model_selection import train_test_split\n",
+    "from sklearn.metrics import classification_report, accuracy_score\n",
+    "import pickle\n",
+    "\n",
+    "# Load dataset (ensure that your dataset is already cleaned and preprocessed)\n",
+    "data = pd.read_excel(r'B:\\OneDrive - Amity University\\Desktop\\Intern\\Infosys\\Assignment-6\\resume_screening_results.xlsx')  # Replace with your training file\n",
+    "\n",
+    "# Preprocess text columns (if not already done in previous steps)\n",
+    "def preprocess_text(text):\n",
+    "    text = text.lower()\n",
+    "    text = text.replace('\\n', ' ').replace('\\r', '')\n",
+    "    return text\n",
+    "\n",
+    "data['Resume'] = data['resume'].apply(preprocess_text)\n",
+    "data['Job Description'] = data['job_description'].apply(preprocess_text)\n",
+    "data['Transcript'] = data['transcript'].apply(preprocess_text)\n",
+    "\n",
+    "# Load the pre-trained TF-IDF vectorizer from 'tfidf.pkl'\n",
+    "with open(r'B:\\OneDrive - Amity University\\Desktop\\Intern\\Infosys\\Assignment-6\\tfidf_vectorizer_1.pkl', 'rb') as f:\n",
+    "    vectorizer = pickle.load(f)\n",
+    "\n",
+    "# Apply the same vectorizer to 'Resume', 'Job Description', and 'Transcript'\n",
+    "resume_vectors = vectorizer.transform(data['Resume'])  # Use transform, not fit_transform\n",
+    "job_desc_vectors = vectorizer.transform(data['Job Description'])\n",
+    "transcript_vectors = vectorizer.transform(data['Transcript'])\n",
+    "\n",
+    "# Feature Engineering (similarity computation)\n",
+    "data['resume_job_similarity'] = [np.dot(resume_vectors[i].toarray(), job_desc_vectors[i].toarray().T)[0][0] for i in range(len(data))]\n",
+    "data['transcript_job_similarity'] = [np.dot(transcript_vectors[i].toarray(), job_desc_vectors[i].toarray().T)[0][0] for i in range(len(data))]\n",
+    "\n",
+    "# Combine features into a single DataFrame\n",
+    "X = data[['resume_job_similarity', 'transcript_job_similarity']]\n",
+    "\n",
+    "# Target variable\n",
+    "y = data['decision'].map({'Select': 1, 'selected': 1, 'select': 1, 'reject': 0, 'rejected': 0, 'Reject': 0})\n",
+    "\n",
+    "# Train-Test Split\n",
+    "X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)\n",
+    "\n",
+    "# Train an XGBoost model\n",
+    "model = xgb.XGBClassifier(random_state=42)\n",
+    "\n",
+    "# Fit the model on the training data\n",
+    "model.fit(X_train, y_train)\n",
+    "\n",
+    "# Predictions\n",
+    "y_pred = model.predict(X_test)\n",
+    "\n",
+    "# Evaluation\n",
+    "accuracy = accuracy_score(y_test, y_pred)\n",
+    "print(f'Accuracy: {accuracy:.2f}')\n",
+    "print(classification_report(y_test, y_pred))\n",
+    "\n",
+    "# Extracting feature importances\n",
+    "feature_importances = model.feature_importances_\n",
+    "\n",
+    "# Creating a DataFrame for feature importance\n",
+    "feature_importance_df = pd.DataFrame({\n",
+    "    'Feature': ['resume_job_similarity', 'transcript_job_similarity'],\n",
+    "    'Importance': feature_importances\n",
+    "})\n",
+    "\n",
+    "# Save feature importance to a CSV file\n",
+    "feature_importance_df.to_csv('feature_importance.csv', index=False)\n",
+    "\n",
+    "print(\"Feature importance saved to 'feature_importance.csv'\")\n"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.11.9"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
